@@ -1,7 +1,8 @@
 #!/usr/bin/lua
 
 require "os"
-require "nixio" 
+require "nixio"
+require "bit"
 
 local SERIAL_DEVICE = "/dev/ttyUSB0"
 
@@ -99,6 +100,61 @@ local function doSet(self, value, key)
   end
 end      
 
+local function evseFlagChanged(self, flag, value)
+  if not self.evsecmd then return end
+
+  if self.evseinvert then value = not value end
+  local valstr = value and "0" or "1"
+  evseCmd(self.evsecmd .. " " .. valstr)
+end
+local function evseFlagGet(self)
+  local flag = tonumber('0x' .. self.option:sub(6))
+  local val = bit.check(tonumber('0x' .. config['flags']), flag)
+  if self.invert then
+    val = not val
+  end
+  return val and "1" or "0"
+end
+local function evseFlagSet(self, section, value)
+  local flag = tonumber('0x' .. self.option:sub(6))
+  local flags = tonumber('0x' .. config['flags'])
+  value = value == "1" and true or false
+  if self.invert then value = not value end
+  if value then
+    flags = bit.set(flags, flag)
+  else
+    flags = bit.unset(flags, flag)
+  end
+  local newflags = ("%04x"):format(flags)
+  if newflags ~= config['flags'] then
+    evseFlagChanged(self, flag, value)
+    config['flags'] = newflags
+  end
+end
+local function evseServiceLevelGet(self)
+  local manual = bit.check(tonumber('0x' .. config['flags']), 0x0020)
+  local l2 = bit.check(tonumber('0x' .. config['flags']), 0x0001)
+  if manual and l2 then
+    return "2"
+  elseif manual then
+    return "1"
+  else
+    return "A"
+  end
+end
+local function evseServiceLevelSet(self, section, value)
+  local flags = tonumber('0x' .. config['flags'])
+  if value == "1" then
+    flags = bit.unset(bit.set(flags, 0x0020), 0x0001)
+  elseif value == "2" then
+    flags = bit.set(bit.set(flags, 0x0020), 0x0001)
+  else -- "A"
+    flags = bit.unset(flags, 0x0020)
+  end
+  config['flags'] = ("%04x"):format(flags)
+  evseCmd("SL " .. value)
+end
+
 local m = SimpleForm("openevse", "OpenEVSE Status")
 m.data = config
 
@@ -118,10 +174,54 @@ s:option(DummyValue, "rtc")
 s:option(DummyValue, "current_scale", "Current scale")
 s:option(DummyValue, "current_offset", "Current offset")
 
--- Settable options
 local o
-s = m:section(SimpleSection, "Options")
 
+--
+-- Safety flags
+--
+s = m:section(SimpleSection, "Safety Checks")
+o = s:option(Flag, "flag_0002", "Diode check")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "SD"
+  o.rmempty = false
+  o.invert = true
+o = s:option(Flag, "flag_0004", "Vent check")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "SV"
+  o.rmempty = false
+  o.invert = true
+o = s:option(Flag, "flag_0008", "Ground check")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "SG"
+  o.rmempty = false
+  o.invert = true
+o = s:option(Flag, "flag_0010", "Stuck relay check")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "SR"
+  o.rmempty = false
+  o.invert = true
+o = s:option(Flag, "flag_0200", "GFCI check")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "SS"
+  o.rmempty = false
+  o.invert = true
+
+--
+-- Options
+--
+s = m:section(SimpleSection, "Options")
+o = s:option(ListValue, "flag_0001", "Service Level")
+  o.cfgvalue = evseServiceLevelGet
+  o.write = evseServiceLevelSet
+  o:value("A", "Auto")
+  o:value("1", "Level 1 (L1)")
+  o:value("2", "Level 2 (L2)")
+  o.rmempty = false
 o = s:option(Value, "current_cap_cur", "Current limit")
   o.datatype = "uinteger"
   o.validate = function (self, value, section)
@@ -132,6 +232,19 @@ o = s:option(Value, "current_cap_cur", "Current limit")
     return value
   end
   o.write = function (self, section, value) doSet(self, value, "SC") end
+
+o = s:option(ListValue, "flag_0100", "LCD type")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.evsecmd = "S0"
+  o:value("0", "Color")
+  o:value("1", "Monochrome")
+  o.rmempty = false
+o = s:option(Flag, "flag_0040", "Auto start")
+  o.cfgvalue = evseFlagGet
+  o.write = evseFlagSet
+  o.rmempty = false
+  o.invert = true
 
 return m
 
