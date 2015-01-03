@@ -1,7 +1,7 @@
 luci-app-openevse
 =================
 
-LuCI scripts for RAPI access to an OpenEVSE charger
+LuCI scripts for RAPI access to an [OpenEVSE charger](https://github.com/lincomatic/open_evse)
 
 luasrc/controller - Adds "OpenEVSE" to the Admin -> Status webui
 
