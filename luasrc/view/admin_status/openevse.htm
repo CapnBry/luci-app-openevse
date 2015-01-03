@@ -1,0 +1,37 @@
+<% local f = self.fields %>
+<fieldset class="cbi-section">
+  <legend>System</legend>
+  <table width="100%" cellspacing="10">
+    <tr><td width="33%">OpenEVSE version</td><td><%=f.evse_ver:cfgvalue() .. 
+      " (RAPI " .. f.rapi_ver:cfgvalue() .. ")" %></td></tr>
+<% if f.rtc:cfgvalue() then %>        <tr><td width="33%">Real-time clock</td><td><%=f.rtc:cfgvalue()%></td></tr><% end -%>
+    <tr><td width="33%">State</td><td><%=f.state_desc:cfgvalue()%></td></tr>
+    <tr><td width="33%">Charge time</td><td><%=f.charge_time_elapsed:cfgvalue()%> seconds</td></tr>
+    <tr id="current_row"><td width="33%">Current</td><td id="current"></td></tr>
+  </table>
+</fieldset>
+<script type="text/javascript">//<![CDATA[
+	function progressbar(v, m)
+	{
+		var vn = parseInt(v) || 0;
+		var mn = parseInt(m) || 100;
+		var pc = Math.floor((100 / mn) * vn);
+
+		return String.format(
+			'<div style="width:200px; position:relative; border:1px solid #999999">' +
+				'<div style="background-color:#CCCCCC; width:%d%%; height:15px">' +
+					'<div style="position:absolute; left:0; top:0; text-align:center; width:100%%; color:#000000">' +
+						'<small>%s / %s (%d%%)</small>' +
+					'</div>' +
+				'</div>' +
+			'</div>', pc, v, m, pc
+		);
+	}
+<% if f.current_cur:cfgvalue() then %>
+	document.getElementById('current').innerHTML = progressbar(
+          (<%=f.current_cur:cfgvalue()/1000%>).toFixed(1),
+          "<%=f.current_cap_cur:cfgvalue() .. " amps"%>");
+<% else %>
+        document.getElementById('current_row').style.display = "none";
+<% end %>
+//]]></script>
