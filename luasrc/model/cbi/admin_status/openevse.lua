@@ -40,7 +40,7 @@ local function evseStateDesc(state)
     [0x9] = "GFCI check failed", [0xfe] = "Waiting timer",
     [0xff] = "Disabled"
   }
-  return STATE[tonumber(state)] or "Unknown"
+  return STATE[state] or ("Unknown (%02x)"):format(state)
 end
 
 local function evseChecksum(cmd)
@@ -57,7 +57,7 @@ local function evseCmd(cmd)
   serialfd:write(cmd)
   nixio.nanosleep(0, 10000000)
   local resp = serialfd:read(1024):gsub("\r", "")
-  return segSplit(resp)
+  return segSplit(resp:sub(1, -4))
 end
 
 if os.execute("/usr/bin/stty -F " .. SERIAL_DEVICE .. " raw -echo 115200") ~= 0 then
@@ -84,12 +84,23 @@ config['current_cur'] = evseCmd("GG")
 config['current_cap_min'], config['current_cap_max'] = evseCmd("GC")
 config['current_cap_cur'], config['flags'] = evseCmd("GE")
 config['current_scale'], config['current_offset'] = evseCmd("GA")
-config['state'], config['charge_time_elapsed'] = evseCmd("GS")
-config['state_desc'] = evseStateDesc(config['state'])
+config['state'], config['charge_time_elapsed'], _, config['vflags'] = evseCmd("GS")
+config['state_desc'] = evseStateDesc(tonumber('0x' .. config['state']))
+config['energy_session'], config['energy_total'] = evseCmd("GU")
 
 local y,m,d,h,n,s = evseCmd("GT")
 if not (y == "165" or m == "165" or d == "165" or h == "165" or nn == "165") then
   config['rtc'] = ("20%02d-%02d-%02d %02d:%02d:%02d"):format(y,m,d,h,n,s)
+end
+
+config['energy_session'] = string.format("%.1f", config['energy_session'] / 3600)
+config['energy_total'] = string.format("%.1f", config['energy_total'] / 1000)
+
+-- volatile flags, 0x4000 = BOOTLOCK
+config['vflags'] = tonumber('0x' .. config['vflags'])
+if bit.check(config['vflags'], 0x4000) then
+  -- fuck you, bootlock, go away
+  evseCmd('SB')
 end
 
 local function doSet(self, value, key)
@@ -173,6 +184,8 @@ s:option(DummyValue, "charge_time_elapsed")
 s:option(DummyValue, "rtc")
 s:option(DummyValue, "current_scale", "Current scale")
 s:option(DummyValue, "current_offset", "Current offset")
+s:option(DummyValue, "energy_session")
+s:option(DummyValue, "energy_total")
 
 local o
 

@@ -7,6 +7,7 @@
 <% if f.rtc:cfgvalue() then %>        <tr><td width="33%">Real-time clock</td><td><%=f.rtc:cfgvalue()%></td></tr><% end -%>
     <tr><td width="33%">State</td><td><%=f.state_desc:cfgvalue()%></td></tr>
     <tr><td width="33%">Charge time</td><td><%=f.charge_time_elapsed:cfgvalue()%> seconds</td></tr>
+    <tr><td width="33%">Energy used / total</td><td><%=f.energy_session:cfgvalue()%> Wh / <%=f.energy_total:cfgvalue()%> kWh</td></tr>
     <tr id="current_row"><td width="33%">Current</td><td id="current"></td></tr>
   </table>
 </fieldset>
